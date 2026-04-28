@@ -3,6 +3,8 @@ import pandas as pd
 import datetime
 import re
 import io
+import os
+import tempfile
 from difflib import SequenceMatcher
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -16,6 +18,30 @@ st.set_page_config(
 
 st.title("📋 Solar Edge Roster Reconciliation")
 st.markdown("Upload your Solar Edge email and timesheet Excel files to generate a reconciliation report.")
+
+# ─── Email extraction ────────────────────────────────────────────────────────
+
+def extract_email_text(uploaded_file):
+    filename = uploaded_file.name.lower()
+    if filename.endswith(".msg"):
+        try:
+            import extract_msg
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".msg") as tmp:
+                tmp.write(uploaded_file.read())
+                tmp_path = tmp.name
+            msg = extract_msg.openMsg(tmp_path)
+            text = msg.body or ""
+            msg.close()
+            os.unlink(tmp_path)
+            return text
+        except ImportError:
+            st.error("Missing library: extract-msg. Contact the app admin.")
+            return ""
+        except Exception as e:
+            st.error(f"Could not read .msg file: {e}")
+            return ""
+    else:
+        return uploaded_file.read().decode("utf-8", errors="ignore")
 
 # ─── Helper functions ────────────────────────────────────────────────────────
 
@@ -230,9 +256,9 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("📧 Step 1 — Solar Edge Email")
     email_file = st.file_uploader(
-        "Upload the email as a .txt file",
-        type=["txt"],
-        help="In Outlook: File → Save As → Text Only (.txt)"
+        "Upload the email as .msg or .txt",
+        type=["txt", "msg"],
+        help="In Outlook: File → Save As → Outlook Message (.msg) or Text Only (.txt)"
     )
 
 with col2:
@@ -254,7 +280,7 @@ if st.button("▶ Run Reconciliation", type="primary", use_container_width=True)
     else:
         with st.spinner("Running reconciliation..."):
             # Parse email
-            email_text = email_file.read().decode("utf-8", errors="ignore")
+            email_text = extract_email_text(email_file)
             roster, shift_date, shift_name = parse_email_text(email_text)
 
             if not roster:

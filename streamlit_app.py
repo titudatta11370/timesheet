@@ -90,7 +90,21 @@ def parse_email_text(text):
         })
     return employees, shift_date, shift_name
 
-def read_timesheets_from_files(uploaded_files):
+def time_to_hours(val):
+    """Convert datetime.time or timedelta to float hours."""
+    if isinstance(val, datetime.time):
+        return val.hour + val.minute / 60 + val.second / 3600
+    elif isinstance(val, datetime.timedelta):
+        return val.total_seconds() / 3600
+    elif isinstance(val, (int, float)) and not pd.isna(val) and val > 0:
+        return float(val)
+    return None
+
+def read_timesheets_from_files(uploaded_files, target_date=None):
+    """
+    Read timesheet files. If target_date (datetime.date) is provided,
+    also extract hours for that specific day from the daily schedule.
+    """
     results = {}
     for uploaded_file in uploaded_files:
         try:
@@ -100,7 +114,11 @@ def read_timesheets_from_files(uploaded_files):
             continue
         for sheet_name, df in xl.items():
             name = None
-            hours = None
+            weekly_hours = None
+            daily_hours = None
+            daily_date_found = None
+
+            # Name: row 8, col 5
             try:
                 name_val = df.iloc[8, 5]
                 if pd.notna(name_val) and str(name_val).strip():
@@ -109,31 +127,52 @@ def read_timesheets_from_files(uploaded_files):
                 pass
             if not name:
                 name = sheet_name.strip()
+
             try:
+                dates_row = None
+                daily_hours_row = None
+
                 for i, row in df.iterrows():
                     for j, val in enumerate(row):
+                        # Find the row with dates (row 23 in sample)
+                        if isinstance(val, (datetime.datetime, pd.Timestamp)):
+                            if dates_row is None:
+                                dates_row = i
+                        # Find "Total Daily Hours" row
+                        if "Total Daily Hours" in str(val):
+                            daily_hours_row = i
+                        # Find "Total Hours Worked for Week"
                         if "Total Hours Worked" in str(val):
                             for c in range(len(df.columns)):
-                                cell_val = df.iloc[i, c]
-                                if isinstance(cell_val, datetime.time) and (cell_val.hour > 0 or cell_val.minute > 0):
-                                    hours = cell_val.hour + cell_val.minute / 60 + cell_val.second / 3600
+                                h = time_to_hours(df.iloc[i, c])
+                                if h and h > 0:
+                                    weekly_hours = h
                                     break
-                                elif isinstance(cell_val, datetime.timedelta):
-                                    hours = cell_val.total_seconds() / 3600
-                                    break
-                                elif isinstance(cell_val, (int, float)) and not pd.isna(cell_val) and cell_val > 0:
-                                    hours = float(cell_val)
-                                    break
+
+                # If we have a target date, find daily hours for that date
+                if target_date and dates_row is not None and daily_hours_row is not None:
+                    for c in range(len(df.columns)):
+                        cell_val = df.iloc[dates_row, c]
+                        cell_date = None
+                        if isinstance(cell_val, (datetime.datetime, pd.Timestamp)):
+                            cell_date = cell_val.date() if hasattr(cell_val, 'date') else cell_val
+                        if cell_date and cell_date == target_date:
+                            h = time_to_hours(df.iloc[daily_hours_row, c])
+                            if h is not None:
+                                daily_hours = h
+                                daily_date_found = cell_date
                             break
-                    if hours is not None:
-                        break
+
             except Exception:
                 pass
+
             if name:
                 key = normalize_name(name)
                 results[key] = {
                     "name": name,
-                    "hours": hours,
+                    "weekly_hours": weekly_hours,
+                    "daily_hours": daily_hours,
+                    "daily_date": str(daily_date_found) if daily_date_found else None,
                     "file": uploaded_file.name,
                     "sheet": sheet_name,
                 }
@@ -143,19 +182,45 @@ def reconcile(roster, timesheets):
     results = []
     for emp in roster:
         ts_data, score = fuzzy_match(emp["name"], timesheets)
-        if ts_data and ts_data["hours"] is not None:
-            ts_hours = ts_data["hours"]
-            diff = ts_hours - emp["roster_hours"]
-            status = "MATCH" if abs(diff) < 0.01 else "DISCREPANCY"
-            results.append({**emp, "ts_hours": ts_hours, "diff": diff,
-                           "status": status, "ts_file": ts_data["file"],
-                           "match_score": round(score, 2), "matched_name": ts_data["name"]})
+        if ts_data:
+            # Prefer daily hours if available, fall back to weekly
+            ts_daily = ts_data.get("daily_hours")
+            ts_weekly = ts_data.get("weekly_hours")
+            ts_hours = ts_daily if ts_daily is not None else ts_weekly
+            hours_source = "Daily" if ts_daily is not None else "Weekly total"
+
+            if ts_hours is not None:
+                diff = ts_hours - emp["roster_hours"]
+                status = "MATCH" if abs(diff) < 0.01 else "DISCREPANCY"
+            else:
+                diff = None
+                status = "MISSING TIMESHEET"
+
+            results.append({
+                **emp,
+                "ts_hours": ts_hours,
+                "ts_daily": ts_daily,
+                "ts_weekly": ts_weekly,
+                "hours_source": hours_source,
+                "diff": diff,
+                "status": status,
+                "ts_file": ts_data["file"],
+                "match_score": round(score, 2),
+                "matched_name": ts_data["name"],
+            })
         else:
-            results.append({**emp, "ts_hours": None, "diff": None,
-                           "status": "MISSING TIMESHEET",
-                           "ts_file": ts_data["file"] if ts_data else "—",
-                           "match_score": round(score, 2),
-                           "matched_name": ts_data["name"] if ts_data else "—"})
+            results.append({
+                **emp,
+                "ts_hours": None,
+                "ts_daily": None,
+                "ts_weekly": None,
+                "hours_source": "—",
+                "diff": None,
+                "status": "MISSING TIMESHEET",
+                "ts_file": "—",
+                "match_score": round(score, 2),
+                "matched_name": "—",
+            })
     return results
 
 def build_excel_report(results, shift_date=None, shift_name=None):
@@ -182,7 +247,7 @@ def build_excel_report(results, shift_date=None, shift_name=None):
             c.number_format = num_fmt
         return c
 
-    ws.merge_cells("A1:J1")
+    ws.merge_cells("A1:K1")
     title = "Solar Edge Roster Reconciliation"
     if shift_date:
         title += f"  —  {shift_date}"
@@ -200,7 +265,7 @@ def build_excel_report(results, shift_date=None, shift_name=None):
     discs = sum(1 for r in results if r["status"] == "DISCREPANCY")
     missing = sum(1 for r in results if r["status"] == "MISSING TIMESHEET")
 
-    ws.merge_cells("A2:J2")
+    ws.merge_cells("A2:K2")
     summary = f"Total: {total}   |   Matched: {matched}   |   Discrepancies: {discs}   |   Missing: {missing}"
     c = ws["A2"]
     c.value = summary
@@ -208,11 +273,10 @@ def build_excel_report(results, shift_date=None, shift_name=None):
     c.fill = PatternFill("solid", fgColor=SUBHEADER_BG)
     c.alignment = Alignment(horizontal="center", vertical="center")
 
-    headers = ["Employee", "Emp ID", "Roster Hrs", "Timesheet Hrs", "Difference",
-               "Status", "Matched Name", "Match Score", "Timesheet File", "Notes"]
+    headers = ["Employee", "Emp ID", "Roster Hrs\n(Email Date)", "Timesheet Hrs\n(Same Day)", "Weekly Total\n(Timesheet)", "Difference", "Status", "Hours Source", "Matched Name", "Timesheet File", "Notes"]
     for col, h in enumerate(headers, 1):
         cs(3, col, h, bold=True, bg=HEADER_BG, fg=HEADER_FG, align="center")
-    ws.row_dimensions[3].height = 22
+    ws.row_dimensions[3].height = 30
 
     for row_i, r in enumerate(results, 4):
         ws.row_dimensions[row_i].height = 18
@@ -223,21 +287,26 @@ def build_excel_report(results, shift_date=None, shift_name=None):
         cs(row_i, 1, r["name"], bg=row_bg)
         cs(row_i, 2, r["emp_id"], bg=row_bg, align="center")
         cs(row_i, 3, r["roster_hours"], bg=row_bg, align="center", num_fmt="0.00")
-        ts_val = r["ts_hours"] if r["ts_hours"] is not None else "—"
-        cs(row_i, 4, ts_val, bg=row_bg, align="center", num_fmt="0.00" if r["ts_hours"] is not None else None)
+        # Daily hours (specific date from email)
+        daily_val = r.get("ts_daily")
+        cs(row_i, 4, daily_val if daily_val is not None else "—", bg=row_bg, align="center", num_fmt="0.00" if daily_val is not None else None)
+        # Weekly total
+        weekly_val = r.get("ts_weekly")
+        cs(row_i, 5, weekly_val if weekly_val is not None else "—", bg=row_bg, align="center", num_fmt="0.00" if weekly_val is not None else None)
+        # Difference (roster vs daily if available, else weekly)
         diff_val = r["diff"]
         if diff_val is not None:
             diff_str = f"+{diff_val:.2f}" if diff_val > 0 else ("0.00" if abs(diff_val) < 0.01 else f"{diff_val:.2f}")
         else:
             diff_str = "—"
-        cs(row_i, 5, diff_str, bg=row_bg, align="center")
-        cs(row_i, 6, status, bold=True, bg=row_bg, fg=status_fg, align="center")
-        cs(row_i, 7, r.get("matched_name", "—"), bg=row_bg)
-        cs(row_i, 8, r.get("match_score", "—"), bg=row_bg, align="center")
-        cs(row_i, 9, r.get("ts_file", "—"), bg=row_bg)
-        cs(row_i, 10, "", bg=row_bg)
+        cs(row_i, 6, diff_str, bg=row_bg, align="center")
+        cs(row_i, 7, status, bold=True, bg=row_bg, fg=status_fg, align="center")
+        cs(row_i, 8, r.get("hours_source", "—"), bg=row_bg, align="center")
+        cs(row_i, 9, r.get("matched_name", "—"), bg=row_bg)
+        cs(row_i, 10, r.get("ts_file", "—"), bg=row_bg)
+        cs(row_i, 11, "", bg=row_bg)
 
-    widths = [28, 12, 13, 15, 12, 22, 28, 13, 30, 20]
+    widths = [28, 12, 16, 16, 16, 12, 22, 14, 28, 30, 20]
     for col, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(col)].width = w
 
@@ -286,8 +355,24 @@ if st.button("▶ Run Reconciliation", type="primary", use_container_width=True)
             if not roster:
                 st.error("Could not find any employees in the email. Check the file format.")
             else:
-                # Read timesheets
-                timesheets = read_timesheets_from_files(timesheet_files)
+                # Parse target date from email
+                target_date = None
+                if shift_date:
+                    try:
+                        target_date = datetime.datetime.strptime(shift_date.strip(), "%m/%d/%Y").date()
+                    except ValueError:
+                        try:
+                            target_date = datetime.datetime.strptime(shift_date.strip(), "%m/%d/%y").date()
+                        except ValueError:
+                            pass
+
+                if target_date:
+                    st.info(f"📅 Matching timesheet hours for: **{target_date.strftime('%B %d, %Y')}** ({shift_name})")
+                else:
+                    st.warning("Could not parse date from email — will use weekly totals instead.")
+
+                # Read timesheets with target date
+                timesheets = read_timesheets_from_files(timesheet_files, target_date)
 
                 # Reconcile
                 results = reconcile(roster, timesheets)
@@ -313,9 +398,11 @@ if st.button("▶ Run Reconciliation", type="primary", use_container_width=True)
                     disc_df = pd.DataFrame([{
                         "Employee": r["name"],
                         "Emp ID": r["emp_id"],
-                        "Roster Hrs": r["roster_hours"],
-                        "Timesheet Hrs": r["ts_hours"],
-                        "Difference": f"+{r['diff']:.2f}" if r["diff"] > 0 else f"{r['diff']:.2f}"
+                        "Roster Hrs (Email Date)": r["roster_hours"],
+                        "Timesheet Hrs (Same Day)": r.get("ts_daily") if r.get("ts_daily") is not None else "—",
+                        "Weekly Total": r.get("ts_weekly") if r.get("ts_weekly") is not None else "—",
+                        "Difference": f"+{r['diff']:.2f}" if r["diff"] > 0 else f"{r['diff']:.2f}",
+                        "Source": r.get("hours_source", "—")
                     } for r in discs])
                     st.dataframe(disc_df, use_container_width=True, hide_index=True)
 
@@ -333,18 +420,21 @@ if st.button("▶ Run Reconciliation", type="primary", use_container_width=True)
                         match_df = pd.DataFrame([{
                             "Employee": r["name"],
                             "Emp ID": r["emp_id"],
-                            "Hours": r["roster_hours"],
+                            "Roster Hrs": r["roster_hours"],
+                            "Timesheet Hrs (Day)": r.get("ts_daily") if r.get("ts_daily") is not None else "—",
+                            "Weekly Total": r.get("ts_weekly") if r.get("ts_weekly") is not None else "—",
+                            "Source": r.get("hours_source", "—")
                         } for r in matched])
                         st.dataframe(match_df, use_container_width=True, hide_index=True)
 
                 # Download report
                 st.markdown("---")
-                today = datetime.date.today().strftime("%Y-%m-%d")
+                report_date = shift_date.replace("/", "-") if shift_date else datetime.date.today().strftime("%Y-%m-%d")
                 excel_report = build_excel_report(results, shift_date, shift_name)
                 st.download_button(
                     label="⬇️ Download Excel Report",
                     data=excel_report,
-                    file_name=f"reconciliation_{today}.xlsx",
+                    file_name=f"reconciliation_{report_date}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                     type="primary"

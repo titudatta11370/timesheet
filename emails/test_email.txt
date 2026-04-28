@@ -1,0 +1,87 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2869
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 HelveticaNeue;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red255\green255\blue255;\red13\green110\blue236;
+}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;\cssrgb\c100000\c100000\c100000;\cssrgb\c0\c52549\c94118;
+}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs32 \cf0 \expnd0\expndtw0\kerning0
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 Rizvee Hossain\cb1 \
+\
+\cb3 Project Supervisor\cb1 \
+\
+\
+\
+\cb3 226-203-7290 <tel:{\field{\*\fldinst{HYPERLINK "tel:+12262037290"}}{\fldrslt \cf4 \ul \ulc4 +12262037290}}>\cb1 \
+\
+\
+\
+\pard\pardeftab720\partightenfactor0
+{\field{\*\fldinst{HYPERLINK "mailto:rhossain@stratospherequality.com"}}{\fldrslt \cf4 \cb3 \ul \ulc4 rhossain@stratospherequality.com}}\cb3  <mailto:{\field{\*\fldinst{HYPERLINK "mailto:rhossain@stratospherequality.com"}}{\fldrslt \cf4 \ul \ulc4 rhossain@stratospherequality.com}}>\cb1 \
+\
+\
+\
+\pard\pardeftab720\partightenfactor0
+{\field{\*\fldinst{HYPERLINK "http://www.stratospherequality.com/"}}{\fldrslt \cf4 \cb3 \ul \ulc4 www.stratospherequality.com}}\cb3  <{\field{\*\fldinst{HYPERLINK "https://protect-usb.mimecast.com/s/0MdXCP6q1lsKrv4GTmAWQT?domain=stratospherequality.com%3E"}}{\fldrslt \cf4 \ul \ulc4 https://protect-usb.mimecast.com/s/0MdXCP6q1lsKrv4GTmAWQT?domain=stratospherequality.com>}}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 <{\field{\*\fldinst{HYPERLINK "https://protect-usb.mimecast.com/s/LWKFCOJp7kup95ARIjh-pq?domain=stratospherequality.com%3E"}}{\fldrslt \cf4 \ul \ulc4 https://protect-usb.mimecast.com/s/LWKFCOJp7kup95ARIjh-pq?domain=stratospherequality.com>}}\cb1 \
+\
+\cb3 <{\field{\*\fldinst{HYPERLINK "https://protect-usb.mimecast.com/s/0MdXCP6q1lsKrv4GTmAWQT?domain=stratospherequality.com%3E"}}{\fldrslt \cf4 \ul \ulc4 https://protect-usb.mimecast.com/s/0MdXCP6q1lsKrv4GTmAWQT?domain=stratospherequality.com>}}\cb1 \
+\
+\cb3 	START A PROJECT\cb1 \
+\
+\cb3 Call 877-224-8584 <tel:877-224-8584>\'a0\'a0 or\'a0\'a0\cb1 \
+\
+\cb3 <{\field{\*\fldinst{HYPERLINK "https://protect-usb.mimecast.com/s/TKLuCQAr1mikEB6AhOHOHS?domain=stratospherequality.com/%3E"}}{\fldrslt \cf4 \ul \ulc4 https://protect-usb.mimecast.com/s/TKLuCQAr1mikEB6AhOHOHS?domain=stratospherequality.com/>}}\cb1 \
+\
+\
+\
+\
+\
+\
+\
+\
+\cb3 ________________________________\cb1 \
+\
+\cb3 From: Stratosphere Quality SOLAR <{\field{\*\fldinst{HYPERLINK "mailto:solar@stratospherequality.com"}}{\fldrslt \cf4 \ul \ulc4 solar@stratospherequality.com}}>\cb1 \
+\cb3 Sent: Monday, April 20, 2026 11:12:07 PM\cb1 \
+\cb3 To: Rizvee Hossain <{\field{\*\fldinst{HYPERLINK "mailto:rhossain@stratospherequality.com"}}{\fldrslt \cf4 \ul \ulc4 rhossain@stratospherequality.com}}>\cb1 \
+\cb3 Cc: Time <{\field{\*\fldinst{HYPERLINK "mailto:time@stratospherequality.com"}}{\fldrslt \cf4 \ul \ulc4 time@stratospherequality.com}}>; Roster Receipts <{\field{\*\fldinst{HYPERLINK "mailto:roster.receipts@stratospherequality.com"}}{\fldrslt \cf4 \ul \ulc4 roster.receipts@stratospherequality.com}}>; Amy Zimmerman <{\field{\*\fldinst{HYPERLINK "mailto:azimmerman@stratospherequality.com"}}{\fldrslt \cf4 \ul \ulc4 azimmerman@stratospherequality.com}}>\cb1 \
+\cb3 Subject: SOLAR Edge Receipt for roster 4/20/2026, 1st shift (Completed)\cb1 \
+\
+\
+\cb3 Employee Summary for 4/20/2026, 1st shift, Simcoe Parts Service Inc. - Alliston, ON\cb1 \
+\
+\cb3 Employee	Emp ID #	Payable Hours	Training Hours	Bench Hours	Other Non-Billable Hours	Mileage	\cb1 \
+\cb3 Pranav Birla	T235895	7.50	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Abirham Bitew	T245561	8.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Marvin Dano	T244172	8.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Rizvee Hossain	18338	6.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Kirandeep Kaur	32992	6.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Jashanpreet Kaur Sidhu	T238519	8.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Hassan Khan	T246818	8.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Bhupinder Maan	T248334	8.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Arshdeep Mahay	T246446	7.25	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Rahul Rahul 	unknown	3.75	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Lukas Rezi	T244406	6.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Sagar Saroya	T247820	7.25	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Sidhaeth Sharma 	unknown	7.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Ashdeep Singh	47119	8.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Gurdev Singh	T246277	7.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Jaspreet Singh	50754	8.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Kamaldeep Singh 	unknown	7.50	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Arshpreet Singh Sethi	T247216	8.00	0.00	0.00	0.00	0.00	\cb1 \
+\cb3 Muazzaf Usman	51897	7.75	0.00	0.00	0.00	0.00	\cb1 \
+\
+\cb3 Project Summary for 4/20/2026, 1st shift\cb1 \
+\
+\cb3 Project	Hours	\cb1 \
+\cb3 151029	137.00	\cb1 \
+\
+\cb3 Submitted roster identifier: 2245172}

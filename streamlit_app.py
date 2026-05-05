@@ -97,18 +97,69 @@ def normalize_name(name):
     name = re.sub(r"[^a-zA-Z\s]", "", name).lower().strip()
     return " ".join(sorted(name.split()))
 
-def fuzzy_match(name, candidates, threshold=0.75):
-    key = normalize_name(name)
-    best_score = 0
-    best_match = None
-    for candidate_key, data in candidates.items():
-        score = SequenceMatcher(None, key, candidate_key).ratio()
-        if score > best_score:
-            best_score = score
-            best_match = candidate_key
-    if best_score >= threshold:
-        return candidates[best_match], best_score
-    return None, best_score
+def tokenize_name(name):
+    """Lowercase alpha tokens, deduped, order-independent."""
+    return set(t for t in re.sub(r"[^a-zA-Z\s]", "", name or "").lower().split() if t)
+
+def match_employee(roster_name, candidates):
+    """
+    Match by first+last name token overlap.
+
+    Returns (ts_data, score, note, ambiguous_names).
+
+    - Full match: same set of tokens → note "".
+    - Partial: roster missing tokens that timesheet has → note "Roster missing: <token(s)>".
+    - Partial: timesheet missing tokens that roster has → note "Timesheet missing: <token(s)>".
+    - Overlap but neither is subset → note "Partial name match (common: <token(s)>)".
+    - Ambiguous: more than one timesheet ties on best score with strict-subset overlap →
+        note "Ambiguous — multiple matches" and ambiguous_names lists them.
+    - No overlap → returns (None, 0, "No matching name in timesheets", []).
+    """
+    r_tokens = tokenize_name(roster_name)
+    if not r_tokens:
+        return None, 0, "Roster name is empty", []
+
+    scored = []
+    for key, data in candidates.items():
+        t_tokens = tokenize_name(data["name"])
+        if not t_tokens:
+            continue
+        common = r_tokens & t_tokens
+        if not common:
+            continue
+        score = len(common) / max(len(r_tokens), len(t_tokens))
+        scored.append((score, data, t_tokens, common))
+
+    if not scored:
+        return None, 0, "No matching name in timesheets", []
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best_score = scored[0][0]
+    top = [s for s in scored if abs(s[0] - best_score) < 1e-9]
+
+    # If both sides have 2+ tokens but only 1 in common, this is too weak — reject.
+    best = top[0]
+    _, data, t_tokens, common = best
+    if len(r_tokens) >= 2 and len(t_tokens) >= 2 and len(common) < 2:
+        return None, best_score, f"Only first name matched ({' '.join(sorted(common))})", [d[1]["name"] for d in top]
+
+    # Ambiguity: multiple timesheets equally match (same score, same overlap pattern)
+    if len(top) > 1:
+        names = [d[1]["name"] for d in top]
+        return data, best_score, f"Ambiguous — multiple matches: {', '.join(names)}", names
+
+    if r_tokens == t_tokens:
+        note = ""
+    elif r_tokens.issubset(t_tokens):
+        missing = t_tokens - r_tokens
+        note = f"Roster missing: {' '.join(sorted(missing))}"
+    elif t_tokens.issubset(r_tokens):
+        missing = r_tokens - t_tokens
+        note = f"Timesheet missing: {' '.join(sorted(missing))}"
+    else:
+        note = f"Partial name match (common: {' '.join(sorted(common))})"
+
+    return data, best_score, note, []
 
 def parse_email_text(text):
     employees = []
@@ -230,7 +281,7 @@ def read_timesheets_from_files(uploaded_files):
 def reconcile(roster, timesheets, target_date=None):
     results = []
     for emp in roster:
-        ts_data, score = fuzzy_match(emp["name"], timesheets)
+        ts_data, score, name_note, ambiguous = match_employee(emp["name"], timesheets)
         if ts_data:
             ts_daily = ts_data["daily_by_date"].get(target_date) if target_date else None
             ts_weekly = ts_data.get("weekly_hours")
@@ -255,8 +306,10 @@ def reconcile(roster, timesheets, target_date=None):
                 "ts_file": "; ".join(ts_data["sources"]),
                 "match_score": round(score, 2),
                 "matched_name": ts_data["name"],
+                "name_note": name_note,
             })
         else:
+            # No usable match. Use the name_note to explain why (better than just "MISSING").
             results.append({
                 **emp,
                 "ts_hours": None,
@@ -264,10 +317,11 @@ def reconcile(roster, timesheets, target_date=None):
                 "ts_weekly": None,
                 "hours_source": "—",
                 "diff": None,
-                "status": "MISSING TIMESHEET",
-                "ts_file": "—",
+                "status": "NAME MISMATCH" if ambiguous or "first name" in (name_note or "").lower() else "MISSING TIMESHEET",
+                "ts_file": "; ".join(ambiguous) if ambiguous else "—",
                 "match_score": round(score, 2),
-                "matched_name": "—",
+                "matched_name": "; ".join(ambiguous) if ambiguous else "—",
+                "name_note": name_note or "No matching name in timesheets",
             })
     return results
 
@@ -312,9 +366,10 @@ def build_excel_report(results, shift_date=None, shift_name=None):
     matched = sum(1 for r in results if r["status"] == "MATCH")
     discs = sum(1 for r in results if r["status"] == "DISCREPANCY")
     missing = sum(1 for r in results if r["status"] == "MISSING TIMESHEET")
+    name_issues = sum(1 for r in results if r["status"] == "NAME MISMATCH")
 
     ws.merge_cells("A2:M2")
-    summary = f"Total: {total}   |   Matched: {matched}   |   Discrepancies: {discs}   |   Missing: {missing}"
+    summary = f"Total: {total}   |   Matched: {matched}   |   Discrepancies: {discs}   |   Missing: {missing}   |   Name Issues: {name_issues}"
     c = ws["A2"]
     c.value = summary
     c.font = Font(color="1F3864", name="Calibri", size=10)
@@ -329,8 +384,14 @@ def build_excel_report(results, shift_date=None, shift_name=None):
     for row_i, r in enumerate(results, 4):
         ws.row_dimensions[row_i].height = 18
         status = r["status"]
-        row_bg = GREEN if status == "MATCH" else RED if status == "DISCREPANCY" else AMBER
-        status_fg = MATCH_FG if status == "MATCH" else DISC_FG if status == "DISCREPANCY" else MISS_FG
+        if status == "MATCH":
+            row_bg, status_fg = GREEN, MATCH_FG
+        elif status == "DISCREPANCY":
+            row_bg, status_fg = RED, DISC_FG
+        elif status == "NAME MISMATCH":
+            row_bg, status_fg = AMBER, DISC_FG
+        else:  # MISSING TIMESHEET
+            row_bg, status_fg = AMBER, MISS_FG
 
         cs(row_i, 1, r.get("shift_date", "—"), bg=row_bg, align="center")
         cs(row_i, 2, r.get("shift_name", "—"), bg=row_bg, align="center")
@@ -351,7 +412,7 @@ def build_excel_report(results, shift_date=None, shift_name=None):
         cs(row_i, 10, r.get("hours_source", "—"), bg=row_bg, align="center")
         cs(row_i, 11, r.get("matched_name", "—"), bg=row_bg)
         cs(row_i, 12, r.get("ts_file", "—"), bg=row_bg)
-        cs(row_i, 13, "", bg=row_bg)
+        cs(row_i, 13, r.get("name_note", "") or "", bg=row_bg)
 
     widths = [12, 18, 28, 12, 16, 16, 16, 12, 22, 14, 28, 36, 20]
     for col, w in enumerate(widths, 1):
@@ -442,14 +503,16 @@ if st.button("▶ Run Reconciliation", type="primary", use_container_width=True)
                 matched = [r for r in results if r["status"] == "MATCH"]
                 discs = [r for r in results if r["status"] == "DISCREPANCY"]
                 missing = [r for r in results if r["status"] == "MISSING TIMESHEET"]
+                name_issues = [r for r in results if r["status"] == "NAME MISMATCH"]
 
                 st.success("✅ Reconciliation complete!")
 
-                m1, m2, m3, m4 = st.columns(4)
+                m1, m2, m3, m4, m5 = st.columns(5)
                 m1.metric("Total Employees", len(results))
                 m2.metric("✅ Matched", len(matched))
                 m3.metric("⚠️ Discrepancies", len(discs))
                 m4.metric("❌ Missing Timesheet", len(missing))
+                m5.metric("🔎 Name Issues", len(name_issues))
 
                 st.markdown("---")
 
@@ -464,9 +527,22 @@ if st.button("▶ Run Reconciliation", type="primary", use_container_width=True)
                         "Timesheet Hrs (Same Day)": r.get("ts_daily") if r.get("ts_daily") is not None else "—",
                         "Weekly Total": r.get("ts_weekly") if r.get("ts_weekly") is not None else "—",
                         "Difference": f"+{r['diff']:.2f}" if r["diff"] > 0 else f"{r['diff']:.2f}",
-                        "Source": r.get("hours_source", "—")
+                        "Source": r.get("hours_source", "—"),
+                        "Note": r.get("name_note", "") or "",
                     } for r in discs])
                     st.dataframe(disc_df, use_container_width=True, hide_index=True)
+
+                if name_issues:
+                    st.subheader("🔎 Name Issues (no clean match)")
+                    name_df = pd.DataFrame([{
+                        "Date": r.get("shift_date", "—"),
+                        "Roster Name": r["name"],
+                        "Emp ID": r["emp_id"],
+                        "Roster Hrs": r["roster_hours"],
+                        "Possible Timesheet Name(s)": r.get("matched_name", "—"),
+                        "Note": r.get("name_note", "") or "",
+                    } for r in name_issues])
+                    st.dataframe(name_df, use_container_width=True, hide_index=True)
 
                 if missing:
                     st.subheader("❌ Missing Timesheets")
@@ -475,6 +551,7 @@ if st.button("▶ Run Reconciliation", type="primary", use_container_width=True)
                         "Employee": r["name"],
                         "Emp ID": r["emp_id"],
                         "Roster Hrs": r["roster_hours"],
+                        "Note": r.get("name_note", "") or "",
                     } for r in missing])
                     st.dataframe(miss_df, use_container_width=True, hide_index=True)
 
